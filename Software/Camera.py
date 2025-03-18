@@ -4,7 +4,7 @@ from Software.Model import Model  # 导入Model类
 
 
 class Camera:
-    def __init__(self, label_camera, pushButton_camera):
+    def __init__(self, label_camera, pushButton_camera, model):
         self.image = None
         self.label_camera = label_camera  # 用于显示视频的QLabel
         self.pushButton_camera = pushButton_camera  # 控制摄像头的按钮
@@ -13,8 +13,8 @@ class Camera:
         self.cap_video = None  # 摄像头对象
         self.flag = 0  # 标记摄像头状态：0表示关闭，1表示打开
         self.camera_in_use = False  # 标记摄像头是否正在使用
-        self.model = Model()  # 初始化模型对象
-        self.is_model_loaded = False  # 标记模型是否已加载
+        self.model = model  # 使用外部传入的Model实例
+        self.detecting_object = None  # 当前检测目标
 
     def __del__(self):
         """析构函数：释放摄像头资源"""
@@ -27,10 +27,10 @@ class Camera:
             if self.camera_in_use:
                 print("另一个摄像头正在使用，无法打开本地摄像头。")
                 return
-            self.cap_video = cv.VideoCapture(0)  # 打开摄像头
+            self.cap_video = cv.VideoCapture(1)  # 打开摄像头
             if not self.cap_video.isOpened():  # 检查摄像头是否成功打开
                 print("无法打开摄像头")
-                return9
+                return
             self.timer.start(50)  # 启动定时器，每50毫秒刷新一次
             self.flag = 1  # 标记摄像头为打开状态
             self.pushButton_camera.setText('关闭本地摄像头')  # 更新按钮文本
@@ -47,10 +47,17 @@ class Camera:
     def show_video(self):
         """定时器超时事件：从摄像头读取一帧并显示"""
         ret, img = self.cap_video.read()  # 读取一帧
-        if ret:  # 如果读取成功
-            if self.is_model_loaded:  # 如果模型已加载
-                img = self.model.detect(img)  # 进行目标检测
-            self.show_cv_img(img)  # 显示图像
+        if ret:
+            # 如果检测目标存在，调用模型检测
+            if self.detecting_object:
+                try:
+                    img = self.model.detect(img, self.detecting_object)  # 确保返回处理后的图像
+                except Exception as e:
+                    print(f"检测失败: {e}")
+                    img = cv.putText(img, "Detection Error", (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+            # 显示图像
+            self.show_cv_img(img)
         else:
             print("无法读取摄像头图像!")
 
@@ -63,6 +70,12 @@ class Camera:
         # 在标签上显示图像
         self.label_camera.setPixmap(QtGui.QPixmap.fromImage(image))
 
-    def load_model(self, weight_file):
-        """加载模型权重文件"""
-        self.is_model_loaded = self.model.load_weights(weight_file)
+    def start_detection(self, object_name):
+        """启动检测"""
+        self.detecting_object = object_name
+        print(f"开始检测: {object_name}")
+
+    def stop_detection(self):
+        """停止检测"""
+        self.detecting_object = None
+        print("停止检测")

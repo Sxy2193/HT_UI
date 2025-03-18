@@ -24,6 +24,24 @@ class SerialPort:
                 self.combo_box_port.addItem(port.device)  # 添加可用串口到下拉框
             print("发现串口设备: ", [port.device for port in ports])
 
+        # 针对虚拟串口调试
+        # self.combo_box_port.clear()  # 清空当前选项
+        # ports = []
+        # for i in range(1, 521):
+        #     port_name = f"COM{i}"
+        #     if port_name not in ports:
+        #         try:
+        #             ser = serial.Serial(port_name)
+        #             ser.close()
+        #             ports.append(port_name)
+        #         except:
+        #             pass
+        # if ports:
+        #     self.combo_box_port.addItems(sorted(ports, key=lambda x: int(x[3:])))
+        #     print(f"检测到端口: {ports}")
+        # else:
+        #     print("未找到任何串口!")
+
     def toggle_serial(self):
         """切换串口状态（打开/关闭）"""
         if self.is_open:
@@ -66,26 +84,25 @@ class SerialPort:
         else:
             print("串口未打开!")
 
-    def send_data(self, data):
+    def send_data(self, data_bytes):
         """发送数据"""
         if not self.is_open:
             QMessageBox.warning(None, "警告", "串口未打开！")
             return
 
         try:
-            self.serial_port.write(data.encode('utf-8'))  # 发送数据
+            self.serial_port.write(data_bytes)
         except Exception as e:
             QMessageBox.critical(None, "错误", f"发送数据失败：{e}")
 
     def receive_data(self):
-        """接收数据"""
+        """返回原始字节数据"""
         if not self.is_open:
             QMessageBox.warning(None, "警告", "串口未打开！")
             return None
 
         try:
-            data = self.serial_port.read_all()  # 读取所有数据
-            return data.decode('utf-8')  # 返回解码后的数据
+            return self.serial_port.read_all()
         except Exception as e:
             QMessageBox.critical(None, "错误", f"接收数据失败：{e}")
             return None

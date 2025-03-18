@@ -1,19 +1,24 @@
 import sys
-import UI.untitled
+import UI.untitled_ui
 from PyQt5.QtWidgets import QMainWindow, QApplication, QFileDialog
 from PyQt5.QtCore import QTimer
+import datetime
 
 from Software.Camera import Camera  # 导入Camera类
 from Software.Serial import SerialPort  # 导入SerialPort类
 from Software.IOStream import Stream  # 导入Stream类
+from Software.Model import Model  # 导入Model类
 
 
-class MainWindow(QMainWindow, UI.untitled.Ui_MainWindow):
+class MainWindow(QMainWindow, UI.untitled_ui.Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self)  # 初始化UI
 
-        self.weight_file = None  # 权重文件
+        # 对象-权重映射字典
+        # self.weight_file = None  # 权重文件
+        self.object_weights = {}  # 存储对象和权重的映射关系
+        self.current_object = None  # 当前选中的识别对象
 
         # 创建自定义输出流并连接信号
         self.stream_self = Stream()
@@ -25,9 +30,12 @@ class MainWindow(QMainWindow, UI.untitled.Ui_MainWindow):
         self.pushButton_pape1.clicked.connect(self.click_button1)
         self.pushButton_pape2.clicked.connect(self.click_button2)
 
+        # 初始化Model类
+        self.model = Model()
         # 初始化Camera类
-        self.camera = Camera(self.label_camera, self.pushButton_camera)
+        self.camera = Camera(self.label_camera, self.pushButton_camera, self.model)
         self.pushButton_camera.clicked.connect(self.camera.video_button)  # 打开摄像头
+        self.pushButton_stop_detect.clicked.connect(self.camera.stop_detection)  # 停止识别
 
         # 初始化SerialPort类
         self.serial = SerialPort(
@@ -56,15 +64,50 @@ class MainWindow(QMainWindow, UI.untitled.Ui_MainWindow):
     def send_data(self):
         """发送数据"""
         data = self.textEdit_send.toPlainText()  # 获取发送框中的数据
-        if data:
-            self.serial.send_data(data)  # 发送数据
+        if not data:
+            return
+
+        try:
+            if self.checkBox_HEXSend.isChecked():
+                # 处理Hex格式
+                hex_data = data.replace(' ', '').replace('\n', '').replace('\r', '')
+                if len(hex_data) % 2 != 0:
+                    raise ValueError("Hex数据长度必须是偶数")
+                data_bytes = bytes.fromhex(hex_data)
+            else:
+                # 处理普通文本
+                data_bytes = data.encode('utf-8')
+
+            self.serial.send_data(data_bytes)
+        except ValueError as e:
+            print(f"发送失败：{e}")
+        except Exception as e:
+            print(f"发送失败：{e}")
 
     def read_data(self):
-        """读取串口数据并显示到接收框"""
+        """读取数据（支持Hex接收和时间戳）"""
         if self.serial.is_open:
-            data = self.serial.receive_data()
-            if data:
-                self.textEdit_receive.insertPlainText(data)  # 追加接收的数据
+            data_bytes = self.serial.receive_data()
+            if data_bytes:
+                # Hex显示处理
+                if self.checkBox_HEXReceive.isChecked():
+                    data_display = ' '.join(f"{b:02X}" for b in data_bytes) + ' '
+                else:
+                    try:
+                        data_display = data_bytes.decode('utf-8')
+                    except UnicodeDecodeError:
+                        data_display = str(data_bytes)  # 备选显示方案
+
+                # 时间戳处理
+                if self.checkBox_time.isChecked():
+                    timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S] ")
+                    data_display = timestamp + data_display
+
+                # 换行处理
+                if self.checkBox_rn.isChecked():
+                    data_display += '\r\n'
+
+                self.textEdit_receive.insertPlainText(data_display)
 
     def clear_send(self):
         """清空发送框"""
@@ -75,23 +118,37 @@ class MainWindow(QMainWindow, UI.untitled.Ui_MainWindow):
         self.textEdit_receive.clear()
 
     def load_weights(self):
-        """打开文件对话框选择权重文件"""
-        options = QFileDialog.Options()
-        options |= QFileDialog.ReadOnly
-        weight_file, _ = QFileDialog.getOpenFileName(self, "选择权重文件", "", "Weights Files (*.pt);;All Files (*)",
-                                                     options=options)
-        if weight_file:  # 如果成功选择了权重文件
-            self.weight_file = weight_file  # 存储权重文件路径
-            print(f"已选择权重文件: {self.weight_file}")
-        else:
-            print("未选择权重文件！")
+        """为当前选择的对象加载权重"""
+        current_obj = self.comboBox_recognizing_Objects.currentText()  # 获取当前选择
+        if not current_obj:
+            print("请先选择识别对象！")
+            return
+
+        weight_file, _ = QFileDialog.getOpenFileName(
+            self,
+            f"选择{current_obj}权重文件",
+            "",
+            "Weights Files (*.pt);;All Files (*)"
+        )
+
+        if weight_file:
+            # 通过模型管理器加载权重
+            if self.model.load_weights(current_obj, weight_file):
+                print(f"已为 {current_obj} 绑定权重: {weight_file}")
 
     def enable_detection(self):
-        """点击识别按钮后启用检测功能"""
-        if self.weight_file:
-            self.camera.load_model(self.weight_file)  # 加载模型权重
-        else:
-            print("未选择权重文件！")
+        """切换检测状态"""
+        current_obj = self.comboBox_recognizing_Objects.currentText()  # 直接获取当前选择
+        if not current_obj:
+            print("请先选择识别对象！")
+            self.pushButton_detect.setChecked(False)
+            return
+
+        if current_obj not in self.model.loaded_models:
+            print(f"请先为 [{current_obj}] 加载权重文件！")
+            self.pushButton_detect.setChecked(False)
+            return
+        self.camera.start_detection(current_obj)  # 传递当前对象到摄像头模块
 
     def click_button1(self):
         self.stackedWidget.setCurrentIndex(0)

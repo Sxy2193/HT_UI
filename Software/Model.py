@@ -5,28 +5,42 @@ class Model:
     def __init__(self):
         self.model = None  # 模型对象
         self.weight_file = None  # 权重文件路径
+        self.models = {}  # 存储{对象名称: 模型实例}
+        self.loaded_models = {}  # 存储{对象名称: 权重路径}
 
-    def load_weights(self, weight_file):
-        """加载权重文件"""
+    def load_weights(self, object_name, weight_file):
+        """加载/更新指定对象的权重"""
         try:
-            self.model = YOLO(weight_file)  # 加载 YOLOv8 模型
-            self.weight_file = weight_file
-            print(f"权重文件加载成功: {self.weight_file}")
+            # 释放已有模型
+            if object_name in self.models:
+                del self.models[object_name]
+
+            # 加载新模型
+            self.models[object_name] = YOLO(weight_file)
+            self.loaded_models[object_name] = weight_file
+            print(f"[{object_name}] 权重加载成功")
             return True
         except Exception as e:
-            print(f"加载权重文件失败: {e}")
+            print(f"[{object_name}] 加载失败: {e}")
             return False
 
-    def detect(self, img):
-        """对图像进行目标检测"""
-        if self.model is None:
-            print("未加载权重文件，无法进行检测！")
-            return img  # 返回原始图像
+    def detect(self, img, object_name):
+        """执行目标检测"""
+        if object_name not in self.models:
+            print(f"[{object_name}] 模型未加载")
+            return img
 
         try:
-            results = self.model(img)  # 进行目标检测
-            annotated_frame = results[0].plot()  # 获取带有检测框的帧
-            return annotated_frame
+            # print(f"正在检测: {object_name}")  # 调试信息
+            results = self.models[object_name](img)
+            return results[0].plot()  # 返回绘制检测结果的图像
         except Exception as e:
-            print(f"目标检测失败: {e}")
-            return img  # 返回原始图像
+            print(f"[{object_name}] 检测失败: {e}")
+            return img
+
+    def release_model(self, object_name):
+        """释放指定模型"""
+        if object_name in self.models:
+            del self.models[object_name]
+            del self.loaded_models[object_name]
+            print(f"[{object_name}] 模型已释放")

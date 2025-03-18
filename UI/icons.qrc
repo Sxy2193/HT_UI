@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="../">
+    <file>icon/binance_coin_bnb_crypto_icon_264375.png</file>
+    <file>icon/monero_crypto_icon_264381.png</file>
+  </qresource>
+</RCC>
