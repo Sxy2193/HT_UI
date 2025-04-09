@@ -1,0 +1,26 @@
+<annotation>
+	<folder>initial_imgs</folder>
+	<filename>000207.JPG</filename>
+	<path>D:\datasets\HT_diff_datasets_sxy\initial_imgs\c1 (12).JPG</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>2592</width>
+		<height>1944</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>c1</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>356</xmin>
+			<ymin>822</ymin>
+			<xmax>2195</xmax>
+			<ymax>1317</ymax>
+		</bndbox>
+	</object>
+</annotation>

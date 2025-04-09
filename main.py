@@ -8,6 +8,7 @@ from Software.Camera import Camera  # 导入Camera类
 from Software.Serial import SerialPort  # 导入SerialPort类
 from Software.IOStream import Stream  # 导入Stream类
 from Software.Model import Model  # 导入Model类
+import Software.MyUART
 
 
 class MainWindow(QMainWindow, UI.untitled_ui.Ui_MainWindow):
@@ -33,17 +34,22 @@ class MainWindow(QMainWindow, UI.untitled_ui.Ui_MainWindow):
         # 初始化Model类
         self.model = Model()
         # 初始化Camera类
-        self.camera = Camera(self.label_camera, self.pushButton_camera, self.model)
+        self.camera = Camera(self.label_camera,
+                             self.pushButton_camera,
+                             self.model,
+                             self.pushButton_photo,
+                             self.label_detect,
+                             self.label_decide)
         self.pushButton_camera.clicked.connect(self.camera.video_button)  # 打开摄像头
         self.pushButton_stop_detect.clicked.connect(self.camera.stop_detection)  # 停止识别
+        self.pushButton_photo.clicked.connect(self.camera.save_photo)  # 保存图片
 
         # 初始化SerialPort类
-        self.serial = SerialPort(
-            self.comboBox,  # 串口号选择框
-            self.comboBox_baudrate,  # 波特率选择框
-            self.comboBox_data,  # 数据位选择框
-            self.comboBox_stop,  # 停止位选择框
-            self.pushButton_open_close)
+        self.serial = SerialPort(self.comboBox,  # 串口号选择框
+                                 self.comboBox_baudrate,  # 波特率选择框
+                                 self.comboBox_data,  # 数据位选择框
+                                 self.comboBox_stop,  # 停止位选择框
+                                 self.pushButton_open_close)
         self.pushButton_find_ports.clicked.connect(self.serial.find_ports)  # 查找串口
         self.pushButton_open_close.clicked.connect(self.serial.toggle_serial)  # 打开/关闭串口
         self.pushButton_send.clicked.connect(self.send_data)  # 发送数据
@@ -68,17 +74,19 @@ class MainWindow(QMainWindow, UI.untitled_ui.Ui_MainWindow):
             return
 
         try:
+            hex_data = data.replace(' ', '').replace('\n', '').replace('\r', '')
             if self.checkBox_HEXSend.isChecked():
-                # 处理Hex格式
-                hex_data = data.replace(' ', '').replace('\n', '').replace('\r', '')
                 if len(hex_data) % 2 != 0:
                     raise ValueError("Hex数据长度必须是偶数")
                 data_bytes = bytes.fromhex(hex_data)
+                if self.comboBox_barity.currentText() == 'CRC':
+                    data_final = Software.MyUART.build_packet(data_bytes)
+                else:
+                    data_final = data_bytes
             else:
-                # 处理普通文本
-                data_bytes = data.encode('utf-8')
+                data_final = data.encode('utf-8')
 
-            self.serial.send_data(data_bytes)
+            self.serial.send_data(data_final)
         except ValueError as e:
             print(f"发送失败：{e}")
         except Exception as e:
@@ -94,7 +102,7 @@ class MainWindow(QMainWindow, UI.untitled_ui.Ui_MainWindow):
                     data_display = ' '.join(f"{b:02X}" for b in data_bytes) + ' '
                 else:
                     try:
-                        data_display = data_bytes.decode('utf-8')
+                        data_display = data_bytes.decode('gbk')
                     except UnicodeDecodeError:
                         data_display = str(data_bytes)  # 备选显示方案
 
@@ -124,12 +132,12 @@ class MainWindow(QMainWindow, UI.untitled_ui.Ui_MainWindow):
             print("请先选择识别对象！")
             return
 
-        weight_file, _ = QFileDialog.getOpenFileName(
-            self,
-            f"选择{current_obj}权重文件",
-            "",
-            "Weights Files (*.pt);;All Files (*)"
-        )
+        # 打开文件对话框
+        weight_file, _ = QFileDialog.getOpenFileName(self,
+                                                     f"选择{current_obj}权重文件",
+                                                     "",
+                                                     "Weights Files (*.pt);;All Files (*)"
+                                                     )
 
         if weight_file:
             # 通过模型管理器加载权重

@@ -89,7 +89,6 @@ class SerialPort:
         if not self.is_open:
             QMessageBox.warning(None, "警告", "串口未打开！")
             return
-
         try:
             self.serial_port.write(data_bytes)
         except Exception as e:
@@ -106,3 +105,7 @@ class SerialPort:
         except Exception as e:
             QMessageBox.critical(None, "错误", f"接收数据失败：{e}")
             return None
+
+
+if "__main__" == __name__:
+    pass
