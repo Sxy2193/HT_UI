@@ -17,6 +17,10 @@ def build_packet(payload):
     length = bytes([len(payload)])
     crc_date = head + length + payload  # 包头+长度+载荷
     crc = crc16_modbus(crc_date)  # 校验码
-    return head + length + payload + crc + footer
+    return head + length + payload + crc + footer  # 发送‘head+length+payload+crc+footer’即可
 
-# 发送‘head+length+payload+crc+footer’即可
+
+# 添加标准指令生成
+def build_command(code):
+    """生成标准指令 (FF + CODE + DD)"""
+    return b'\xFF' + code + b'\xDD'

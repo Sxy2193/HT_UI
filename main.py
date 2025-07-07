@@ -1,4 +1,6 @@
 import sys
+import time
+
 import UI.untitled_ui
 from PyQt5.QtWidgets import QMainWindow, QApplication, QFileDialog
 from PyQt5.QtCore import QTimer
@@ -9,6 +11,7 @@ from Software.Serial import SerialPort  # 导入SerialPort类
 from Software.IOStream import Stream  # 导入Stream类
 from Software.Model import Model  # 导入Model类
 import Software.MyUART
+from Hardware.LabelSending import LabelSender  # 导入LabelSender类
 
 
 class MainWindow(QMainWindow, UI.untitled_ui.Ui_MainWindow):
@@ -63,30 +66,47 @@ class MainWindow(QMainWindow, UI.untitled_ui.Ui_MainWindow):
         self.timer.timeout.connect(self.read_data)
         self.timer.start(100)  # 每100毫秒读取一次
 
+        self.label_sender = LabelSender(self.camera,
+                                        self.serial,
+                                        self.model,
+                                        self)
+        self.label_sender.detect_trigger.connect(self.enable_detection)  # 识别按钮
+
     def append_text(self, text):
         """重定义print输出"""
         self.textEdit_iostream.append(text)
 
     def send_data(self):
         """发送数据"""
-        data = self.textEdit_send.toPlainText()  # 获取发送框中的数据
-        if not data:
-            return
-
         try:
-            hex_data = data.replace(' ', '').replace('\n', '').replace('\r', '')
+            data = self.textEdit_send.toPlainText()
+            # print(f"从输入框获取数据{data}")
+            if not data:
+                print("发送内容为空")
+                return
+
+            hex_data = data.replace(' ', '').replace('\n', '').replace('\r', '')  # 去除空格和换行符
             if self.checkBox_HEXSend.isChecked():
                 if len(hex_data) % 2 != 0:
                     raise ValueError("Hex数据长度必须是偶数")
-                data_bytes = bytes.fromhex(hex_data)
-                if self.comboBox_barity.currentText() == 'CRC':
-                    data_final = Software.MyUART.build_packet(data_bytes)
+                data_bytes = bytes.fromhex(hex_data)  # 转换为字节
+
+                # 逐个发送字节
+                for byte in data_bytes:
+                    if self.comboBox_barity.currentText() == 'CRC':
+                        # 假设 CRC 处理需要单个字节的封装（根据实际协议调整）
+                        data_final = Software.MyUART.build_packet(bytes([byte]))
+                    else:
+                        data_final = bytes([byte])  # 单个字节
+                    self.serial.send_data(data_final)  # 串口发送
+                    time.sleep(0.01)
+                    
                 else:
                     data_final = data_bytes
             else:
                 data_final = data.encode('utf-8')
+                self.serial.send_data(data_final)  # 串口发送
 
-            self.serial.send_data(data_final)
         except ValueError as e:
             print(f"发送失败：{e}")
         except Exception as e:
@@ -96,6 +116,7 @@ class MainWindow(QMainWindow, UI.untitled_ui.Ui_MainWindow):
         """读取数据（支持Hex接收和时间戳）"""
         if self.serial.is_open:
             data_bytes = self.serial.receive_data()
+
             if data_bytes:
                 # Hex显示处理
                 if self.checkBox_HEXReceive.isChecked():
@@ -115,7 +136,11 @@ class MainWindow(QMainWindow, UI.untitled_ui.Ui_MainWindow):
                 if self.checkBox_rn.isChecked():
                     data_display += '\r\n'
 
+                # 输出到textEdit_receive
                 self.textEdit_receive.insertPlainText(data_display)
+                # print(f"接收数据{data_display}")
+                # 进入下位机连接函数
+                self.label_sender.handle_received_data(data_bytes)
 
     def clear_send(self):
         """清空发送框"""
@@ -145,18 +170,30 @@ class MainWindow(QMainWindow, UI.untitled_ui.Ui_MainWindow):
                 print(f"已为 {current_obj} 绑定权重: {weight_file}")
 
     def enable_detection(self):
-        """切换检测状态"""
-        current_obj = self.comboBox_recognizing_Objects.currentText()  # 直接获取当前选择
-        if not current_obj:
-            print("请先选择识别对象！")
-            self.pushButton_detect.setChecked(False)
-            return
+        """原检测逻辑增强（支持动态权重）"""
+        current_obj = self.comboBox_recognizing_Objects.currentText()
 
+        # 检查是否已加载权重
         if current_obj not in self.model.loaded_models:
-            print(f"请先为 [{current_obj}] 加载权重文件！")
-            self.pushButton_detect.setChecked(False)
-            return
-        self.camera.start_detection(current_obj)  # 传递当前对象到摄像头模块
+            # 弹窗提示用户选择权重文件
+            weight_file, _ = QFileDialog.getOpenFileName(
+                self,
+                f"请选择{current_obj}的权重文件",
+                "Weight/",  # 默认打开权重目录
+                "Weight Files (*.pt)"
+            )
+            if not weight_file:
+                print("未选择权重文件，检测已取消")
+                return
+
+            if self.model.load_weights(current_obj, weight_file):
+                print(f"动态加载权重: {weight_file}")
+            else:
+                return
+
+        # 启动检测
+        self.camera.start_detection(current_obj)
+        print(f"开始检测: {current_obj}")
 
     def click_button1(self):
         self.stackedWidget.setCurrentIndex(0)

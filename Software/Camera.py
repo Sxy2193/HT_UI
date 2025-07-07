@@ -5,7 +5,7 @@ import datetime
 import time
 
 # 宏Camera_Selection，用于选择摄像头
-Camera_Selection = 1  # 4
+Camera_Selection = 4  # 4
 
 
 class Camera:
@@ -29,7 +29,7 @@ class Camera:
         self.label_capture = label_detect  # 新增：用于显示捕捉区域的label
         self.current_boxes = []  # 新增：存储当前检测框坐标
         self.capture_timer = QtCore.QTimer()  # 新增：捕捉定时器
-        self.capture_timer.timeout.connect(self.display_box)
+        # self.capture_timer.timeout.connect(self.display_box)  # 连接定时器超时信号到显示检测框函数
         self.capture_timer.start(1000)  # 每秒触发一次
         self.label_decide = label_decide  # 用于显示检测结果的label
 
@@ -74,7 +74,7 @@ class Camera:
                 self.fps = self.frame_count / elapsed_time
                 self.frame_count = 0  # 重置帧计数器
                 self.start_time = time.time()  # 重置开始时间
-            cv.putText(img, f"FPS:{self.fps:.1f}", (10, 30), cv.FONT_HERSHEY_DUPLEX, 0.8, (0, 255, 0), 1)
+            cv.putText(img, f"FPS:{self.fps:.1f}", (10, 30), cv.FONT_HERSHEY_DUPLEX, 0.8, (0, 0, 0), 1)
 
             # 如果检测目标存在，调用模型检测
             if self.detecting_object:
@@ -107,6 +107,7 @@ class Camera:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%Hh%Mm%Ss")  # 时间戳
         cv.imwrite(timestamp + ".jpg", self.image)
         print("保存成功,文件名: ", timestamp + ".jpg")
+        print(self.label_decide.text())
 
     def start_detection(self, object_name):
         """启动检测"""
@@ -149,7 +150,7 @@ class Camera:
                 return
 
             # 转换并显示到label_capture
-            frame = cv.cvtColor(cropped, cv.COLOR_BGR2RGB)
+            frame = cv.cvtColor(self.image, cv.COLOR_BGR2RGB)
             qimage = QtGui.QImage(frame.tobytes(), frame.shape[1], frame.shape[0], QtGui.QImage.Format_RGB888)
 
             # 缩放适应label尺寸（保持比例）
@@ -167,6 +168,14 @@ class Camera:
                 # 在label_decide上显示错误信息
                 self.label_decide.setText(f"None")
                 print(f"显示检测框失败: {e}")
+
+    def return_label(self):
+        """返回当前标签"""
+        if self.label_decide is not None:
+            label = self.label_decide.text()
+            return label
+        else:
+            return None
 
 
 if "__main__" == __name__:

@@ -68,6 +68,7 @@ class SerialPort:
                 stopbits=stop_bits,
                 timeout=1  # 设置超时时间
             )
+            print(f"串口已打开，配置：{self.serial_port}")  # 调试输出
             self.is_open = True
             self.pushButton_open_close.setText('关闭串口')  # 更新按钮文本
             print(f"串口 {port} 已打开")
@@ -91,8 +92,9 @@ class SerialPort:
             return
         try:
             self.serial_port.write(data_bytes)
+            print(f"发送数据{data_bytes}")  # 调试
         except Exception as e:
-            QMessageBox.critical(None, "错误", f"发送数据失败：{e}")
+            print(f"发送数据失败：{e}")
 
     def receive_data(self):
         """返回原始字节数据"""
@@ -101,9 +103,19 @@ class SerialPort:
             return None
 
         try:
-            return self.serial_port.read_all()
+            data = self.serial_port.read_all()
+            # return data
+            if data:
+                # 查找帧头和帧尾
+                start_index = data.find(b'\xFF')    # 帧头
+                end_index = data.find(b'\xDD')      # 帧尾
+                # 如果同时找到帧头和帧尾，并且帧尾在帧头之后
+                if start_index != -1 and end_index != -1 and end_index > start_index:
+                    return data[start_index + 1:end_index]  # 提取帧头和帧尾之间的数据
+            return None                                     # 如果未找到帧头或帧尾，返回None
+
         except Exception as e:
-            QMessageBox.critical(None, "错误", f"接收数据失败：{e}")
+            print(f"接收数据失败：{e}")
             return None
 
 
